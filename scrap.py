@@ -9,6 +9,7 @@ parser.add_argument('-e', dest='end', default=2, help='End MovieId (default: 2)'
 parser.add_argument('-sp', dest='start_page', default=1, help='Start MovieId (default: 1)')
 parser.add_argument('-ep', dest='end_page', default=2, help='End MovieId (default: 2)')
 parser.add_argument('-l', dest='latest', action='store_true', help='Download latest songs')
+parser.add_argument('-H', dest='home_page', action='store_true', help='Download home page songs')
 
 parser.add_argument('-c', dest='concurrency', default=1, help='Concurrency (default: 1)')
 
@@ -28,7 +29,7 @@ def scrap(url, movieId):
 
     cook = r.getheader('Set-Cookie')
     html = str(r.read())
-    movie = re.search('<title>([\w ]*) \(', html).group(1)
+    movie = re.search('<title>([^\(]*)', html).group(1).strip()
     link = re.findall('http://www.starfile.info/download-7s-zip-new/\?Token=[\w=]*', html)[-1]
     req = Request(link, headers={'User-Agent': 'Mozilla/5.0', 'Cookie': cook})
     page = urlopen(req)
@@ -63,7 +64,9 @@ def getUrls():
     id_list = range(int(args.start), int(args.end))
     if args.latest:
         id_list = getIdsFromPage(args.start_page, args.end_page, 'http://www.sunmusiq.com/latest.asp?pgNo={}')
-    elif args.start_page != 0 and args.end_page != 0:
+    elif args.home_page:
+        id_list = getIdsFromPage(1, 7, 'http://www.sunmusiq.com/?pgNo={}') #Only 7 pages are available in homepage
+    elif args.start_page != 0 and args.end_page != 0 and args.start == 1 and args.end == 2:
         id_list = getIdsFromPage(args.start_page, args.end_page, 'http://sunmusiq.com/mp3-database.asp?pgNo={}')
     URLS = [('http://www.sunmusiq.com/tamil_movie_songs_listen_download.asp?MovieId={}'.format(movieId), movieId) for movieId in id_list]
     return URLS
