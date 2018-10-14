@@ -1,4 +1,4 @@
-from urllib.request import Request, urlopen
+import requests
 import re, zipfile, os
 import concurrent.futures
 import argparse
@@ -15,7 +15,7 @@ parser.add_argument('-c', dest='concurrency', default=1, help='Concurrency (defa
 
 args = parser.parse_args()
 
-BASE_URL = 'http://www.sunmusiq.com/'
+BASE_URL = 'https://www.sunmusiq.com/'
 
 
 def isDuplicate(movieId, n_songs):
@@ -23,11 +23,9 @@ def isDuplicate(movieId, n_songs):
 
 def scrap(url, movie_id):
 
-    req = Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-    r = urlopen(req)
+    req = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'})
 
-    cook = r.getheader('Set-Cookie')
-    html = str(r.read())
+    html = req.content.decode()
     movie = re.search('<title>([^\(]*)', html).group(1).strip()
     n_songs = html.count("/mp3-download/download")
 
@@ -36,32 +34,32 @@ def scrap(url, movie_id):
         return
 
     link = re.findall('http://www.starfile.info/download-7s-zip-new/\?Token=[\w=]*', html)[-1]
-    req = Request(link, headers={'User-Agent': 'Mozilla/5.0', 'Cookie': cook})
-    page = urlopen(req)
+    req = requests.get(link, headers={'User-Agent': 'Mozilla/5.0'}) #with cookie
 
-    cook = page.getheader('Set-Cookie')
     link = link.replace('download-7s-zip-new/', 'download-7s-zip-new/download-3.ashx')
-    req = Request(link, headers={'User-Agent': 'Mozilla/5.0', 'Cookie': cook})
-    print('Downloading {} ...'.format(movie))
-    page = urlopen(req).read()
 
-    with open("{}.zip".format(movie_id), "wb") as f:
-        f.write(page)
-        with zipfile.ZipFile("{}.zip".format(movie_id), "r") as zip_ref:
-            zip_ref.extractall()
+    print('Downloading {} ...'.format(movie))
+    req = requests.get(link, headers={'User-Agent': 'Mozilla/5.0'}, stream=True)
+
+    zip_file_name = "{}.zip".format(movie_id)
+    with open(zip_file_name, "wb") as f:
+        for block in req.iter_content(1024):
+            f.write(block)
+
+    with zipfile.ZipFile(zip_file_name) as zip_ref:
+        zip_ref.extractall()
 
     # Cleaning the zip file
-    os.remove("{}.zip".format(movie_id))
+    os.remove(zip_file_name)
     new_movie_ids[movie_id] = n_songs
 
 def getIdsFromPage(st, en, url):
     id_list = []
     pg_list = [url.format(pg) for pg in range(int(st), int(en))]
     for pg_url in pg_list:
-        req = Request(pg_url, headers={'User-Agent': 'Mozilla/5.0'})
-        r = urlopen(req)
+        req = requests.get(pg_url, headers={'User-Agent': 'Mozilla/5.0'})
 
-        html = str(r.read())
+        html = req.content.decode()
         id_list.extend(re.findall('([0-9]+)-starmusiq-download', html))
     return list(set([ int(i_d) for i_d in id_list]))
 
@@ -104,4 +102,3 @@ with concurrent.futures.ThreadPoolExecutor(max_workers=int(args.concurrency)) as
         except Exception as exc:
             print('%r Failed: %s' % (url, exc))
     write_dict_into_file()
-
